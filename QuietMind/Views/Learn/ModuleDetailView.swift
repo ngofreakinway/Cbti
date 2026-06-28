@@ -7,7 +7,6 @@ struct ModuleDetailView: View {
 
     @State private var currentSection = 0
     @State private var reflectionTexts: [String: String] = [:]
-    @State private var showExercise = false
 
     private var section: ModuleSection { module.sections[currentSection] }
     private var isLast: Bool { currentSection == module.sections.count - 1 }
@@ -153,7 +152,7 @@ struct MarkdownText: View {
     }
 
     private func parseInline(_ text: String) -> AttributedString {
-        var result = (try? AttributedString(markdown: text, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        let result = (try? AttributedString(markdown: text, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
         return result
     }
 }

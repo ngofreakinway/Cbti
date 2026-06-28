@@ -327,10 +327,10 @@ private struct SleepWindowSetupPage: View {
         )
         profile.prescribedBedTimeHour = h
         profile.prescribedBedTimeMinute = m
-        profile.morningReminderHour = profile.prescribedWakeTimeHour
-        profile.morningReminderMinute = profile.prescribedWakeTimeMinute + 30 < 60
-            ? profile.prescribedWakeTimeMinute + 30
-            : profile.prescribedWakeTimeMinute - 30
+        // Schedule morning reminder 30 min after wake time, handling hour rollover
+        let wakeTotal = profile.prescribedWakeTimeHour * 60 + profile.prescribedWakeTimeMinute + 30
+        profile.morningReminderHour = (wakeTotal / 60) % 24
+        profile.morningReminderMinute = wakeTotal % 60
         store.saveProfile()
 
         if profile.morningReminderEnabled {

@@ -65,10 +65,6 @@ private struct ModuleCard: View {
     let module: WorkbookModule
     let isCompleted: Bool
 
-    private var cardColor: Color {
-        Color(module.color) // Relies on asset catalog color names matching; falls back gracefully
-    }
-
     var body: some View {
         HStack(spacing: 16) {
             Image(systemName: module.icon)

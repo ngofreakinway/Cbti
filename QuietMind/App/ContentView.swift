@@ -2,12 +2,11 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var store: AppStore
-    @State private var showOnboarding = false
 
     var body: some View {
         Group {
             if !store.isReady {
-                ProgressView()
+                SwiftUI.ProgressView()
             } else if store.profile == nil || !(store.profile?.onboardingCompleted ?? false) {
                 OnboardingView()
             } else {
@@ -40,7 +39,7 @@ struct MainTabView: View {
                 }
                 .tag(2)
 
-            ProgressView()
+            SleepProgressView()
                 .tabItem {
                     Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
                 }

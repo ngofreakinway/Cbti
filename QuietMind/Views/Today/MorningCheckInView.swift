@@ -31,14 +31,31 @@ struct MorningCheckInView: View {
         _energyLevel = State(initialValue: entry.energyLevel)
     }
 
+    // MARK: - Midnight-crossing helpers
+    // DatePicker(.hourAndMinute) keeps everything on the same calendar date.
+    // If the user sets bed at 11 PM and out-of-bed at 7 AM, both land on "today"
+    // so outOfBedTime < bedTime. We add one day whenever that happens.
+
+    private func adjusted(_ time: Date, after reference: Date) -> Date {
+        guard time < reference else { return time }
+        return Calendar.current.date(byAdding: .day, value: 1, to: time) ?? time
+    }
+
+    private var adjustedOutOfBed: Date { adjusted(outOfBedTime, after: bedTime) }
+    private var adjustedLightsOut: Date { adjusted(lightsOutTime, after: bedTime) }
+    private var adjustedFinalWake: Date { adjusted(finalWakeTime, after: bedTime) }
+
+    var estimatedTIB: Int {
+        max(0, Int(adjustedOutOfBed.timeIntervalSince(bedTime) / 60))
+    }
+
     var estimatedTST: Int {
-        let tib = max(0, Int(outOfBedTime.timeIntervalSince(bedTime) / 60))
-        return max(0, tib - Int(sleepOnsetMinutes) - Int(wakeAfterSleepOnset))
+        max(0, estimatedTIB - Int(sleepOnsetMinutes) - Int(wakeAfterSleepOnset))
     }
 
     var estimatedSE: Double {
-        let tib = max(1, Int(outOfBedTime.timeIntervalSince(bedTime) / 60))
-        return Double(estimatedTST) / Double(tib) * 100
+        guard estimatedTIB > 0 else { return 0 }
+        return Double(estimatedTST) / Double(estimatedTIB) * 100
     }
 
     var body: some View {
@@ -93,6 +110,12 @@ struct MorningCheckInView: View {
 
                 Section("Summary (estimated)") {
                     HStack {
+                        Label("Time in Bed", systemImage: "bed.double.fill")
+                        Spacer()
+                        Text(SleepCalculator.formatMinutes(estimatedTIB))
+                            .foregroundStyle(.secondary).bold()
+                    }
+                    HStack {
                         Label("Total Sleep", systemImage: "moon.fill")
                         Spacer()
                         Text(SleepCalculator.formatMinutes(estimatedTST))
@@ -122,12 +145,13 @@ struct MorningCheckInView: View {
 
     private func save() {
         entry.bedTime = bedTime
-        entry.lightsOutTime = lightsOutTime
+        // Persist midnight-adjusted times so downstream calculations are always correct
+        entry.lightsOutTime = adjustedLightsOut
+        entry.finalWakeTime = adjustedFinalWake
+        entry.outOfBedTime = adjustedOutOfBed
         entry.sleepOnsetMinutes = Int(sleepOnsetMinutes)
         entry.wakeAfterSleepOnset = Int(wakeAfterSleepOnset)
         entry.numberOfAwakenings = Int(numberOfAwakenings)
-        entry.finalWakeTime = finalWakeTime
-        entry.outOfBedTime = outOfBedTime
         entry.sleepQuality = sleepQuality
         entry.morningMood = morningMood
         entry.energyLevel = energyLevel

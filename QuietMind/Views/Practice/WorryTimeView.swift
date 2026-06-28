@@ -6,7 +6,6 @@ struct WorryTimeView: View {
     @State private var isInWorrySession = false
     @State private var sessionTimeRemaining = 20 * 60
     @State private var timer: Timer?
-    @State private var selectedWorryIndex: Int?
 
     struct WorryItem: Identifiable {
         let id = UUID()
@@ -17,21 +16,20 @@ struct WorryTimeView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if isInWorrySession {
-                    worrySession
-                } else {
-                    deferralInbox
-                }
+        // No NavigationStack here — this view is pushed inside PracticeView's NavigationStack
+        VStack(spacing: 0) {
+            if isInWorrySession {
+                worrySession
+            } else {
+                deferralInbox
             }
-            .navigationTitle("Scheduled Worry")
-            .navigationBarTitleDisplayMode(.inline)
-            .onDisappear { timer?.invalidate() }
         }
+        .navigationTitle("Scheduled Worry")
+        .navigationBarTitleDisplayMode(.inline)
+        .onDisappear { stopTimer() }
     }
 
-    // MARK: - Deferral Inbox (use throughout the day)
+    // MARK: - Deferral Inbox
 
     private var deferralInbox: some View {
         VStack(spacing: 0) {
@@ -110,7 +108,6 @@ struct WorryTimeView: View {
 
     private var worrySession: some View {
         VStack(spacing: 20) {
-            // Timer
             HStack {
                 Image(systemName: "timer")
                     .foregroundStyle(.orange)
@@ -123,7 +120,7 @@ struct WorryTimeView: View {
             }
             .padding(.horizontal)
 
-            ProgressView(value: Double(20 * 60 - sessionTimeRemaining), total: Double(20 * 60))
+            SwiftUI.ProgressView(value: Double(20 * 60 - sessionTimeRemaining), total: Double(20 * 60))
                 .tint(.orange)
                 .padding(.horizontal)
 
@@ -148,14 +145,12 @@ struct WorryTimeView: View {
 
             Spacer()
 
-            VStack(spacing: 8) {
-                Text("For each worry: can you act on it? If yes, make a plan. If no, practice acceptance — acknowledge the uncertainty and set it aside.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 20)
+            Text("For each worry: can you act on it? If yes, make a plan. If no, practice acceptance — acknowledge the uncertainty and set it aside.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+                .padding(.bottom, 20)
         }
     }
 
@@ -194,9 +189,12 @@ struct WorryTimeView: View {
                 }
 
                 Button(action: { worry.deferred = false }) {
-                    Label(worry.deferred ? "Mark addressed" : "Addressed", systemImage: worry.deferred ? "checkmark.circle" : "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(worry.deferred ? .secondary : .green)
+                    Label(
+                        worry.deferred ? "Mark addressed" : "Addressed",
+                        systemImage: worry.deferred ? "checkmark.circle" : "checkmark.circle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(worry.deferred ? .secondary : .green)
                 }
                 .buttonStyle(.plain)
             }
@@ -218,6 +216,8 @@ struct WorryTimeView: View {
     private func startWorrySession() {
         isInWorrySession = true
         sessionTimeRemaining = 20 * 60
+        // Timer is scheduled from the main thread (button action), so its closure
+        // fires on the main RunLoop — safe to mutate @State directly.
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             if sessionTimeRemaining > 0 {
                 sessionTimeRemaining -= 1
@@ -228,9 +228,13 @@ struct WorryTimeView: View {
     }
 
     private func endSession() {
+        stopTimer()
+        isInWorrySession = false
+    }
+
+    private func stopTimer() {
         timer?.invalidate()
         timer = nil
-        isInWorrySession = false
     }
 
     private func formatTime(_ seconds: Int) -> String {

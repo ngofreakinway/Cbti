@@ -1,7 +1,7 @@
 import SwiftUI
 import Charts
 
-struct ProgressView: View {
+struct SleepProgressView: View {
     @EnvironmentObject var store: AppStore
 
     private var entries: [SleepEntry] { store.last7Entries }
@@ -31,7 +31,6 @@ struct ProgressView: View {
                     }
                     .padding(.horizontal)
 
-                    // Sleep efficiency chart
                     if !entries.isEmpty {
                         SleepEfficiencyChart(entries: entries)
                             .padding(.horizontal)
@@ -50,7 +49,6 @@ struct ProgressView: View {
                         .padding(.top, 40)
                     }
 
-                    // Sleep restriction guidance
                     if avgSE > 0, let profile = store.profile {
                         SleepWindowGuidanceCard(
                             sleepEfficiency: avgSE,
@@ -168,7 +166,7 @@ private struct TotalSleepChart: View {
                         y: .value("TST (min)", entry.totalSleepTime)
                     )
                     .foregroundStyle(Color.indigo.gradient)
-                    .cornerRadius(4)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }
             .chartYAxis {
@@ -210,7 +208,7 @@ private struct SleepOnsetChart: View {
                         y: .value("SOL (min)", entry.sleepOnsetMinutes)
                     )
                     .foregroundStyle((entry.sleepOnsetMinutes <= 30 ? Color.green : Color.orange).gradient)
-                    .cornerRadius(4)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }
             .frame(height: 140)
@@ -228,9 +226,18 @@ private struct SleepWindowGuidanceCard: View {
     let profile: UserProfile
     let recommendedTIB: Int
 
-    private var adjustment: (Int, String) {
+    private var adjustment: (adjustment: Int, message: String) {
         let currentTIB = Int(profile.prescribedTimeInBedHours * 60)
         return SleepCalculator.sleepWindowAdjustment(sleepEfficiency: sleepEfficiency, currentTIBMinutes: currentTIB)
+    }
+
+    private var suggestedBedtime: (hour: Int, minute: Int) {
+        let newTIB = max(5 * 60, Int(profile.prescribedTimeInBedHours * 60) + adjustment.adjustment)
+        return SleepCalculator.bedtime(
+            wakeHour: profile.prescribedWakeTimeHour,
+            wakeMinute: profile.prescribedWakeTimeMinute,
+            tibMinutes: newTIB
+        )
     }
 
     var body: some View {
@@ -238,22 +245,15 @@ private struct SleepWindowGuidanceCard: View {
             Label("Sleep Window Recommendation", systemImage: "bed.double.fill")
                 .font(.headline)
 
-            Text(adjustment.1)
+            Text(adjustment.message)
                 .foregroundStyle(.secondary)
                 .font(.subheadline)
-
-            let newTIB = Int(profile.prescribedTimeInBedHours * 60) + adjustment.0
-            let (h, m) = SleepCalculator.bedtime(
-                wakeHour: profile.prescribedWakeTimeHour,
-                wakeMinute: profile.prescribedWakeTimeMinute,
-                tibMinutes: newTIB
-            )
 
             HStack {
                 VStack(alignment: .leading) {
                     Text("Suggested Bedtime")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text(String(format: "%02d:%02d", h, m))
+                    Text(String(format: "%02d:%02d", suggestedBedtime.hour, suggestedBedtime.minute))
                         .font(.title2.bold()).foregroundStyle(.indigo)
                 }
                 Spacer()

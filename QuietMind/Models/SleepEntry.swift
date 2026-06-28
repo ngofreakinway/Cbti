@@ -40,8 +40,13 @@ final class SleepEntry {
         self.date = Calendar.current.startOfDay(for: date)
 
         let now = Date()
-        self.bedTime = now
-        self.lightsOutTime = now
+        let cal = Calendar.current
+        // Default bed/lights-out to yesterday 11 PM so the pickers open with a sensible value
+        // and midnight-crossing math produces a positive TIB from the start.
+        let yesterday = cal.date(byAdding: .day, value: -1, to: now) ?? now
+        let defaultBed = cal.date(bySettingHour: 23, minute: 0, second: 0, of: yesterday) ?? now
+        self.bedTime = defaultBed
+        self.lightsOutTime = defaultBed
         self.finalWakeTime = now
         self.outOfBedTime = now
 
