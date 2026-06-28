@@ -28,6 +28,10 @@ struct MainTabView: View {
                 .environmentObject(store)
                 .tabItem { Label("Today", systemImage: "moon.zzz.fill") }
 
+            CoachingView()
+                .environmentObject(store)
+                .tabItem { Label("Coach", systemImage: "brain.head.profile") }
+
             LearnView()
                 .environmentObject(store)
                 .tabItem { Label("Learn", systemImage: "book.fill") }

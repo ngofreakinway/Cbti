@@ -38,6 +38,9 @@ struct TodayView: View {
                         TodayStatsCard(entry: entry)
                     }
 
+                    TopInsightCard()
+                        .environmentObject(store)
+
                     StimulusControlReminder()
                 }
                 .padding(.horizontal, 20)
@@ -363,5 +366,61 @@ private struct StimulusControlReminder: View {
         .padding(16)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+// MARK: - Top Insight Card (coach teaser)
+
+private struct TopInsightCard: View {
+    @EnvironmentObject var store: AppStore
+
+    private var topInsight: SleepInsight? {
+        guard let profile = store.profile else { return nil }
+        return SleepCoachEngine.insights(
+            entries: store.sleepEntries,
+            profile: profile,
+            programDay: store.programDayNumber
+        ).first
+    }
+
+    var body: some View {
+        if let insight = topInsight {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.indigo)
+                    Text("Coach")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.indigo)
+                    Spacer()
+                    Image(systemName: insight.icon)
+                        .font(.caption)
+                        .foregroundStyle(insight.color)
+                    Text(insight.title)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(insight.color)
+                }
+
+                Text(insight.body)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+
+                HStack {
+                    Spacer()
+                    Text("See all insights →")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.indigo)
+                }
+            }
+            .padding(14)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.indigo.opacity(0.18), lineWidth: 1)
+            )
+        }
     }
 }
