@@ -194,7 +194,7 @@ struct WorryTimeView: View {
                         systemImage: worry.deferred ? "checkmark.circle" : "checkmark.circle.fill"
                     )
                     .font(.caption)
-                    .foregroundStyle(worry.deferred ? .secondary : .green)
+                    .foregroundStyle(worry.deferred ? Color(.secondaryLabel) : Color.green)
                 }
                 .buttonStyle(.plain)
             }
