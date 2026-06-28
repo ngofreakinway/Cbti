@@ -295,7 +295,7 @@ private struct SleepWindowEditor: View {
                 Text("Time in Bed")
                 Spacer()
                 Text(String(format: "%.1f hours", tibHours))
-                    .foregroundStyle(isDirty ? .indigo : .secondary)
+                    .foregroundStyle(isDirty ? Color.indigo : Color.secondary)
             }
             Slider(value: $tibHours, in: 5...10, step: 0.5)
                 .tint(.indigo)

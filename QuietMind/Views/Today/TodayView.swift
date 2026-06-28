@@ -231,7 +231,7 @@ private struct CheckInCard: View {
                         .foregroundStyle(.primary)
                     Text(isCompleted ? "Completed ✓" : subtitle)
                         .font(.caption)
-                        .foregroundStyle(isCompleted ? .green : .secondary)
+                        .foregroundStyle(isCompleted ? Color.green : Color.secondary)
                 }
 
                 Spacer()

@@ -118,7 +118,7 @@ struct BreathingExerciseView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(isRunning ? Color(.systemGray4) : Color.cyan)
-                    .foregroundStyle(isRunning ? .primary : .white)
+                    .foregroundStyle(isRunning ? Color(.label) : Color.white)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
             .buttonStyle(.plain)

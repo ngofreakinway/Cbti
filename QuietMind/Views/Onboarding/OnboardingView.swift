@@ -183,7 +183,7 @@ private struct ConditionCard: View {
                 Spacer()
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? .indigo : .secondary)
+                    .foregroundStyle(isSelected ? Color.indigo : Color.secondary)
             }
             .padding(16)
             .background(Color(.secondarySystemBackground))

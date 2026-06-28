@@ -181,7 +181,7 @@ struct RatingRow: View {
                             .fill(i <= value ? Color.indigo : Color(.systemGray5))
                             .frame(width: 28, height: 28)
                             .overlay(
-                                Text("\(i)").font(.caption2).foregroundStyle(i <= value ? .white : .secondary)
+                                Text("\(i)").font(.caption2).foregroundStyle(i <= value ? Color.white : Color.secondary)
                             )
                     }
                     .buttonStyle(.plain)
