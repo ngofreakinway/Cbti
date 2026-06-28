@@ -1,4 +1,5 @@
 import SwiftUI
+import HealthKit
 
 struct MorningCheckInView: View {
     @EnvironmentObject var store: AppStore
@@ -16,6 +17,10 @@ struct MorningCheckInView: View {
     @State private var sleepQuality: Int
     @State private var morningMood: Int
     @State private var energyLevel: Int
+
+    @State private var healthSourceFields: Set<String> = []
+    @State private var isLoadingHealth = false
+    @State private var healthError: String?
 
     init(entry: SleepEntry) {
         self.entry = entry
@@ -61,20 +66,73 @@ struct MorningCheckInView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Text("Complete this log as soon as you wake up, while the night is fresh. Estimate — don't obsess over exact times.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                // HealthKit banner
+                if isLoadingHealth {
+                    Section {
+                        HStack(spacing: 10) {
+                            ProgressView().tint(.pink)
+                            Text("Reading Apple Health…")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } else if !healthSourceFields.isEmpty {
+                    Section {
+                        HStack(spacing: 10) {
+                            Image(systemName: "heart.fill")
+                                .foregroundStyle(.pink)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Pre-filled from Apple Health")
+                                    .font(.subheadline.weight(.medium))
+                                Text("Review and adjust anything that looks wrong.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } else if let error = healthError {
+                    Section {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.circle")
+                                .foregroundStyle(.orange)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } else if HKHealthStore.isHealthDataAvailable() {
+                    Section {
+                        Text("Complete this log as soon as you wake up, while the night is fresh. Estimate — don't obsess over exact times.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        Text("Complete this log as soon as you wake up, while the night is fresh. Estimate — don't obsess over exact times.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section("Time in Bed") {
-                    DatePicker("Got into bed", selection: $bedTime, displayedComponents: .hourAndMinute)
-                    DatePicker("Lights out / tried to sleep", selection: $lightsOutTime, displayedComponents: .hourAndMinute)
+                    HealthLabeledPicker(
+                        label: "Got into bed",
+                        selection: $bedTime,
+                        fromHealth: healthSourceFields.contains("bedTime")
+                    )
+                    HealthLabeledPicker(
+                        label: "Lights out / tried to sleep",
+                        selection: $lightsOutTime,
+                        fromHealth: healthSourceFields.contains("lightsOutTime")
+                    )
                 }
 
                 Section("During the Night") {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("How long to fall asleep?")
+                        HealthFieldLabel(label: "How long to fall asleep?", fromHealth: healthSourceFields.contains("sleepOnsetMinutes"))
                         Text("\(Int(sleepOnsetMinutes)) minutes")
                             .font(.headline).foregroundStyle(.indigo)
                         Slider(value: $sleepOnsetMinutes, in: 0...180, step: 5)
@@ -82,7 +140,7 @@ struct MorningCheckInView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Total time awake during the night")
+                        HealthFieldLabel(label: "Total time awake during the night", fromHealth: healthSourceFields.contains("wakeAfterSleepOnset"))
                         Text("\(Int(wakeAfterSleepOnset)) minutes")
                             .font(.headline).foregroundStyle(.orange)
                         Slider(value: $wakeAfterSleepOnset, in: 0...240, step: 5)
@@ -90,7 +148,7 @@ struct MorningCheckInView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Number of awakenings")
+                        HealthFieldLabel(label: "Number of awakenings", fromHealth: healthSourceFields.contains("numberOfAwakenings"))
                         Text("\(Int(numberOfAwakenings))")
                             .font(.headline).foregroundStyle(.secondary)
                         Slider(value: $numberOfAwakenings, in: 0...20, step: 1)
@@ -98,8 +156,16 @@ struct MorningCheckInView: View {
                 }
 
                 Section("Morning") {
-                    DatePicker("Final wake time", selection: $finalWakeTime, displayedComponents: .hourAndMinute)
-                    DatePicker("Got out of bed", selection: $outOfBedTime, displayedComponents: .hourAndMinute)
+                    HealthLabeledPicker(
+                        label: "Final wake time",
+                        selection: $finalWakeTime,
+                        fromHealth: healthSourceFields.contains("finalWakeTime")
+                    )
+                    HealthLabeledPicker(
+                        label: "Got out of bed",
+                        selection: $outOfBedTime,
+                        fromHealth: healthSourceFields.contains("outOfBedTime")
+                    )
                 }
 
                 Section("Ratings") {
@@ -125,7 +191,7 @@ struct MorningCheckInView: View {
                         Label("Sleep Efficiency", systemImage: "percent")
                         Spacer()
                         Text(String(format: "%.0f%%", estimatedSE))
-                            .foregroundStyle(estimatedSE >= 85 ? .green : .red).bold()
+                            .foregroundStyle(estimatedSE >= 85 ? Color.green : Color.red).bold()
                     }
                 }
             }
@@ -140,12 +206,43 @@ struct MorningCheckInView: View {
                         .bold()
                 }
             }
+            .task { await fetchHealthData() }
         }
+    }
+
+    // MARK: - HealthKit fetch
+
+    private func fetchHealthData() async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        isLoadingHealth = true
+        let granted = await HealthKitManager.shared.requestAuthorization()
+        guard granted else {
+            isLoadingHealth = false
+            healthError = "Apple Health access not granted. Fill in manually."
+            return
+        }
+        let data = await HealthKitManager.shared.fetchLastNight()
+        isLoadingHealth = false
+
+        guard !data.sourceFields.isEmpty else {
+            healthError = "No sleep data found in Apple Health for last night."
+            return
+        }
+
+        // Apply values from HealthKit
+        if let v = data.bedTime         { bedTime = v }
+        if let v = data.lightsOutTime   { lightsOutTime = v }
+        if let v = data.outOfBedTime    { outOfBedTime = v }
+        if let v = data.finalWakeTime   { finalWakeTime = v }
+        if let v = data.sleepOnsetMinutes   { sleepOnsetMinutes = Double(min(v, 180)) }
+        if let v = data.wakeAfterSleepOnset { wakeAfterSleepOnset = Double(min(v, 240)) }
+        if let v = data.numberOfAwakenings  { numberOfAwakenings = Double(min(v, 20)) }
+
+        healthSourceFields = data.sourceFields
     }
 
     private func save() {
         entry.bedTime = bedTime
-        // Persist midnight-adjusted times so downstream calculations are always correct
         entry.lightsOutTime = adjustedLightsOut
         entry.finalWakeTime = adjustedFinalWake
         entry.outOfBedTime = adjustedOutOfBed
@@ -158,6 +255,47 @@ struct MorningCheckInView: View {
         entry.morningCompleted = true
         store.save(entry)
         dismiss()
+    }
+}
+
+// MARK: - Health-aware field helpers
+
+private struct HealthFieldLabel: View {
+    let label: String
+    let fromHealth: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(label)
+            if fromHealth {
+                Image(systemName: "heart.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.pink)
+            }
+        }
+    }
+}
+
+private struct HealthLabeledPicker: View {
+    let label: String
+    @Binding var selection: Date
+    let fromHealth: Bool
+
+    var body: some View {
+        if fromHealth {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(label)
+                    Image(systemName: "heart.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.pink)
+                }
+                DatePicker("", selection: $selection, displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+            }
+        } else {
+            DatePicker(label, selection: $selection, displayedComponents: .hourAndMinute)
+        }
     }
 }
 

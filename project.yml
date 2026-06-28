@@ -18,6 +18,7 @@ targets:
     platform: iOS
     sources:
       - path: QuietMind
+    entitlements: QuietMind/QuietMind.entitlements
     info:
       path: QuietMind/Info.plist
       properties:
@@ -26,6 +27,7 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSUserNotificationsUsageDescription: "QuietMind sends reminders for your sleep diary and bedtime wind-down."
+        NSHealthShareUsageDescription: "QuietMind reads your sleep data from Apple Health to pre-populate your morning diary."
         UIBackgroundModes:
           - remote-notification
     settings:

@@ -20,6 +20,8 @@
     <string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>NSHealthShareUsageDescription</key>
+    <string>QuietMind reads your sleep data from Apple Health to pre-populate your morning diary.</string>
     <key>NSUserNotificationsUsageDescription</key>
     <string>QuietMind sends reminders for your sleep diary and bedtime wind-down routine.</string>
     <key>UIApplicationSceneManifest</key>
