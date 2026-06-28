@@ -120,42 +120,51 @@ final class HealthKitManager {
             result.sourceFields.insert("totalSleepMinutes")
         }
 
-        // --- Final wake time: start of the awake period that led to getting up ---
-        // We anchor on outOfBedTime: the terminal awakening is the latest awake
-        // sample whose start is before outOfBedTime. This avoids mistaking a
-        // brief 3 AM awakening for the final wake when the watch lost contact
-        // afterward and recorded no further data.
+        // --- Final wake time ---
+        // Key insight: if sleep resumes AFTER the last awake sample (lastAsleep.endDate
+        // > lastAwake.startDate), the person went back to sleep after that awakening.
+        // In that case the "final wake" is when sleep ended, not when that awakening
+        // started. Using the awake-sample start in that situation would mistake a
+        // mid-night blip (e.g. 3:21 AM) for the morning wake-up.
         if let outOfBed = result.outOfBedTime {
-            if let terminalAwake = awakeSamples
+            if let lastAsleep = asleepSamples.last,
+               let lastAwake = awakeSamples.last,
+               lastAsleep.endDate > lastAwake.startDate {
+                // Sleep continued after the last recorded awakening → final wake = end of sleep
+                result.finalWakeTime = lastAsleep.endDate
+            } else if let terminalAwake = awakeSamples
                 .filter({ $0.startDate < outOfBed })
                 .max(by: { $0.startDate < $1.startDate }) {
+                // Last awake sample is the terminal one (no sleep after it)
                 result.finalWakeTime = terminalAwake.startDate
             } else if let lastAsleep = asleepSamples.last {
-                // No awake sample found before outOfBed — use end of last sleep stage
+                // No awake samples at all — use end of last sleep stage
                 result.finalWakeTime = lastAsleep.endDate
             }
             result.sourceFields.insert("finalWakeTime")
         }
 
-        // --- WASO & awakenings: only mid-night awakenings (after first sleep,
-        // before the terminal wake-up). The terminal awake period is not "waking
-        // during the night" — it's the morning wake-up.
+        // --- WASO & awakenings ---
+        // Only count mid-night awakenings: after first sleep, before the terminal wake.
+        // WASO formula: TIB - SOL - TST - awakeAfterFinalWake
+        // This ensures SleepEntry.totalSleepTime (which subtracts awakeAfterFinalWake
+        // separately) recovers exactly TST without double-counting.
         if let firstAsleep = asleepSamples.first,
-           let terminalWakeStart = result.finalWakeTime {
+           let finalWake = result.finalWakeTime {
             let midNightAwake = awakeSamples.filter {
-                $0.startDate >= firstAsleep.startDate && $0.startDate < terminalWakeStart
+                $0.startDate >= firstAsleep.startDate && $0.startDate < finalWake
             }
             result.numberOfAwakenings = midNightAwake.count
             result.sourceFields.insert("numberOfAwakenings")
 
-            // WASO derived from TST so the math always reconciles:
-            // TIB = SOL + TST + WASO  →  WASO = TIB - SOL - TST
             if let tst = result.totalSleepMinutes,
                let bed = result.bedTime,
                let outOfBed = result.outOfBedTime {
                 let tib = max(0, Int(outOfBed.timeIntervalSince(bed) / 60))
                 let sol = result.sleepOnsetMinutes ?? 0
-                result.wakeAfterSleepOnset = max(0, tib - sol - tst)
+                let awakeAfterFinalWake = max(0, Int(outOfBed.timeIntervalSince(finalWake) / 60))
+                // WASO = TIB - SOL - TST - awakeAfterFinalWake (mid-night only)
+                result.wakeAfterSleepOnset = max(0, tib - sol - tst - awakeAfterFinalWake)
             } else {
                 result.wakeAfterSleepOnset = midNightAwake.reduce(0) {
                     $0 + Int($1.endDate.timeIntervalSince($1.startDate) / 60)
