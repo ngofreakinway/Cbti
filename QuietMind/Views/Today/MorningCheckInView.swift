@@ -58,8 +58,13 @@ struct MorningCheckInView: View {
         max(0, Int(adjustedOutOfBed.timeIntervalSince(bedTime) / 60))
     }
 
+    var estimatedAwakeAfterFinalWake: Int {
+        max(0, Int(adjustedOutOfBed.timeIntervalSince(adjustedFinalWake) / 60))
+    }
+
     var estimatedTST: Int {
-        max(0, estimatedTIB - Int(sleepOnsetMinutes) - Int(wakeAfterSleepOnset))
+        let awake = Int(sleepOnsetMinutes) + Int(wakeAfterSleepOnset) + estimatedAwakeAfterFinalWake
+        return max(0, estimatedTIB - awake)
     }
 
     var estimatedSE: Double {
@@ -198,6 +203,36 @@ struct MorningCheckInView: View {
                         Text(SleepCalculator.formatMinutes(estimatedTIB))
                             .foregroundStyle(.secondary).bold()
                     }
+
+                    // Break down the three sources of awake time so the math is visible
+                    if Int(sleepOnsetMinutes) > 0 {
+                        HStack {
+                            Label("Sleep Onset", systemImage: "hourglass")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("− \(SleepCalculator.formatMinutes(Int(sleepOnsetMinutes)))")
+                                .foregroundStyle(.secondary).font(.subheadline)
+                        }
+                    }
+                    if Int(wakeAfterSleepOnset) > 0 {
+                        HStack {
+                            Label("Mid-Night Awake", systemImage: "moon.zzz")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("− \(SleepCalculator.formatMinutes(Int(wakeAfterSleepOnset)))")
+                                .foregroundStyle(.secondary).font(.subheadline)
+                        }
+                    }
+                    if estimatedAwakeAfterFinalWake > 0 {
+                        HStack {
+                            Label("Awake Before Rising", systemImage: "sunrise")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("− \(SleepCalculator.formatMinutes(estimatedAwakeAfterFinalWake))")
+                                .foregroundStyle(.secondary).font(.subheadline)
+                        }
+                    }
+
                     HStack {
                         Label("Total Sleep", systemImage: "moon.fill")
                         Spacer()

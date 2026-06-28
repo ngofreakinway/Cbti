@@ -76,9 +76,15 @@ final class SleepEntry {
         max(0, Int(outOfBedTime.timeIntervalSince(bedTime) / 60))
     }
 
+    /// Minutes lying awake in bed after the final awakening (before getting up)
+    var awakeAfterFinalWake: Int {
+        max(0, Int(outOfBedTime.timeIntervalSince(finalWakeTime) / 60))
+    }
+
     /// Total Sleep Time in minutes
+    /// TST = TIB − SOL − WASO − (outOfBed − finalWake)
     var totalSleepTime: Int {
-        let awake = sleepOnsetMinutes + wakeAfterSleepOnset
+        let awake = sleepOnsetMinutes + wakeAfterSleepOnset + awakeAfterFinalWake
         return max(0, timeInBed - awake)
     }
 
