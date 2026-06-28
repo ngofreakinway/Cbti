@@ -96,4 +96,89 @@ final class AppStore: ObservableObject {
         guard avgTST > 0 else { return 7 * 60 }
         return max(5 * 60, Int(avgTST))
     }
+
+    // MARK: - Streak & program day
+
+    var currentStreak: Int {
+        let cal = Calendar.current
+        var streak = 0
+        var checkDate = cal.startOfDay(for: Date())
+        for _ in 0..<90 {
+            let hasEntry = sleepEntries.contains {
+                cal.isDate($0.date, inSameDayAs: checkDate) && $0.morningCompleted
+            }
+            if hasEntry {
+                streak += 1
+                guard let prev = cal.date(byAdding: .day, value: -1, to: checkDate) else { break }
+                checkDate = prev
+            } else {
+                break
+            }
+        }
+        return streak
+    }
+
+    var programDayNumber: Int {
+        guard let profile = profile else { return 1 }
+        let cal = Calendar.current
+        let days = cal.dateComponents(
+            [.day],
+            from: cal.startOfDay(for: profile.programStartDate),
+            to: cal.startOfDay(for: Date())
+        ).day ?? 0
+        return max(1, days + 1)
+    }
+
+    // MARK: - Sleep window management
+
+    func applyWindowAdjustment() {
+        guard let profile = profile else { return }
+        let currentTIB = Int(profile.prescribedTimeInBedHours * 60)
+        let result = SleepCalculator.sleepWindowAdjustment(
+            sleepEfficiency: averageSleepEfficiency7d,
+            currentTIBMinutes: currentTIB
+        )
+        let newTIB = max(5 * 60, currentTIB + result.adjustment)
+        let (h, m) = SleepCalculator.bedtime(
+            wakeHour: profile.prescribedWakeTimeHour,
+            wakeMinute: profile.prescribedWakeTimeMinute,
+            tibMinutes: newTIB
+        )
+        profile.prescribedBedTimeHour = h
+        profile.prescribedBedTimeMinute = m
+        saveProfile()
+        if profile.eveningReminderEnabled {
+            NotificationManager.shared.scheduleWindDownReminder(
+                bedHour: h, bedMinute: m,
+                minutesBefore: profile.windDownMinutesBefore
+            )
+        }
+    }
+
+    func updateSleepWindow(wakeHour: Int, wakeMinute: Int, tibMinutes: Int) {
+        guard let profile = profile else { return }
+        profile.prescribedWakeTimeHour = wakeHour
+        profile.prescribedWakeTimeMinute = wakeMinute
+        let (h, m) = SleepCalculator.bedtime(
+            wakeHour: wakeHour,
+            wakeMinute: wakeMinute,
+            tibMinutes: tibMinutes
+        )
+        profile.prescribedBedTimeHour = h
+        profile.prescribedBedTimeMinute = m
+        saveProfile()
+        if profile.morningReminderEnabled {
+            let wakeTotal = wakeHour * 60 + wakeMinute + 30
+            NotificationManager.shared.scheduleMorningReminder(
+                hour: (wakeTotal / 60) % 24,
+                minute: wakeTotal % 60
+            )
+        }
+        if profile.eveningReminderEnabled {
+            NotificationManager.shared.scheduleWindDownReminder(
+                bedHour: h, bedMinute: m,
+                minutesBefore: profile.windDownMinutesBefore
+            )
+        }
+    }
 }

@@ -7,43 +7,42 @@ struct ContentView: View {
         Group {
             if !store.isReady {
                 SwiftUI.ProgressView()
+                    .tint(.indigo)
             } else if store.profile == nil || !(store.profile?.onboardingCompleted ?? false) {
                 OnboardingView()
+                    .environmentObject(store)
             } else {
                 MainTabView()
+                    .environmentObject(store)
             }
         }
     }
 }
 
 struct MainTabView: View {
-    @State private var selectedTab = 0
+    @EnvironmentObject var store: AppStore
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView {
             TodayView()
-                .tabItem {
-                    Label("Today", systemImage: "moon.zzz.fill")
-                }
-                .tag(0)
+                .environmentObject(store)
+                .tabItem { Label("Today", systemImage: "moon.zzz.fill") }
 
             LearnView()
-                .tabItem {
-                    Label("Learn", systemImage: "book.fill")
-                }
-                .tag(1)
+                .environmentObject(store)
+                .tabItem { Label("Learn", systemImage: "book.fill") }
 
             PracticeView()
-                .tabItem {
-                    Label("Practice", systemImage: "heart.fill")
-                }
-                .tag(2)
+                .environmentObject(store)
+                .tabItem { Label("Practice", systemImage: "heart.fill") }
 
             SleepProgressView()
-                .tabItem {
-                    Label("Progress", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .tag(3)
+                .environmentObject(store)
+                .tabItem { Label("Progress", systemImage: "chart.line.uptrend.xyaxis") }
+
+            SettingsView()
+                .environmentObject(store)
+                .tabItem { Label("Settings", systemImage: "gearshape.fill") }
         }
         .tint(.indigo)
     }

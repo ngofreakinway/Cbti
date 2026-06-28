@@ -7,6 +7,7 @@ struct ModuleDetailView: View {
 
     @State private var currentSection = 0
     @State private var reflectionTexts: [String: String] = [:]
+    @State private var linkedExercise: LinkedExercise?
 
     private var section: ModuleSection { module.sections[currentSection] }
     private var isLast: Bool { currentSection == module.sections.count - 1 }
@@ -15,12 +16,13 @@ struct ModuleDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                // Progress indicator
+                // Section progress capsules
                 HStack(spacing: 4) {
                     ForEach(0..<module.sections.count, id: \.self) { i in
                         Capsule()
                             .fill(i <= currentSection ? accentColor : Color(.systemGray5))
                             .frame(height: 4)
+                            .animation(.easeInOut(duration: 0.25), value: currentSection)
                     }
                 }
                 .padding(.top, 4)
@@ -28,21 +30,22 @@ struct ModuleDetailView: View {
                 // Section header
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Section \(currentSection + 1) of \(module.sections.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(.secondary)
                     Text(section.title)
                         .font(.title2.bold())
                 }
 
-                // Body text (rendered as simple attributed text)
+                // Body text
                 MarkdownText(section.body)
 
-                // Linked exercise CTA
+                // Linked exercise — tappable, opens as a sheet
                 if let exerciseID = section.exerciseID {
-                    ExerciseLinkCard(exerciseID: exerciseID)
+                    ExerciseLinkCard(exerciseID: exerciseID) {
+                        linkedExercise = LinkedExercise(id: exerciseID)
+                    }
                 }
 
-                // Reflection
+                // Reflection prompt
                 if let prompt = section.reflection {
                     ReflectionCard(
                         prompt: prompt,
@@ -53,10 +56,10 @@ struct ModuleDetailView: View {
                     )
                 }
 
-                // Navigation
+                // Navigation buttons
                 HStack(spacing: 12) {
                     if currentSection > 0 {
-                        Button(action: { currentSection -= 1 }) {
+                        Button(action: { withAnimation { currentSection -= 1 } }) {
                             Label("Back", systemImage: "chevron.left")
                                 .frame(maxWidth: .infinity)
                                 .padding()
@@ -89,14 +92,13 @@ struct ModuleDetailView: View {
                 }
             }
         }
+        .sheet(item: $linkedExercise) { ex in
+            ExercisePracticeSheet(exerciseID: ex.id)
+        }
     }
 
     private func advance() {
-        if isLast {
-            markComplete()
-        } else {
-            withAnimation { currentSection += 1 }
-        }
+        if isLast { markComplete() } else { withAnimation { currentSection += 1 } }
     }
 
     private func markComplete() {
@@ -110,22 +112,53 @@ struct ModuleDetailView: View {
 
     private var accentColor: Color {
         switch module.color {
-        case "indigo": return .indigo
-        case "teal": return .teal
-        case "purple": return .purple
-        case "orange": return .orange
-        case "green": return .green
-        case "red": return .red
-        case "cyan": return .cyan
-        case "blue": return .blue
-        case "yellow": return Color(red: 0.8, green: 0.6, blue: 0)
-        case "mint": return .mint
-        default: return .indigo
+        case "indigo":  return .indigo
+        case "teal":    return .teal
+        case "purple":  return .purple
+        case "orange":  return .orange
+        case "green":   return .green
+        case "red":     return .red
+        case "cyan":    return .cyan
+        case "blue":    return .blue
+        case "yellow":  return Color(red: 0.78, green: 0.58, blue: 0)
+        case "mint":    return .mint
+        default:        return .indigo
         }
     }
 }
 
-// MARK: - Markdown Text (lightweight parser)
+// MARK: - Linked Exercise identifier
+
+struct LinkedExercise: Identifiable {
+    let id: String
+}
+
+// MARK: - Exercise Practice Sheet (launched from Learn modules)
+
+private struct ExercisePracticeSheet: View {
+    let exerciseID: String
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch exerciseID {
+                case "breathing":      BreathingExerciseView()
+                case "pmr":            PMRView()
+                case "thought_record": ThoughtRecordView()
+                case "worry_time":     WorryTimeView()
+                default:
+                    ContentUnavailableView(
+                        "Exercise not found",
+                        systemImage: "questionmark.circle",
+                        description: Text("This exercise isn't available yet.")
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Markdown Text (lightweight renderer)
 
 struct MarkdownText: View {
     let raw: String
@@ -148,11 +181,16 @@ struct MarkdownText: View {
     }
 
     private var paragraphs: [String] {
-        raw.components(separatedBy: "\n\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        raw.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private func parseInline(_ text: String) -> AttributedString {
-        let result = (try? AttributedString(markdown: text, options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(text)
+        let result = (try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(text)
         return result
     }
 }
@@ -161,50 +199,54 @@ struct MarkdownText: View {
 
 private struct ExerciseLinkCard: View {
     let exerciseID: String
+    let onTap: () -> Void
 
     private var exerciseName: String {
         switch exerciseID {
-        case "breathing": return "Breathing Exercise"
-        case "pmr": return "Progressive Muscle Relaxation"
-        case "thought_record": return "Thought Record"
-        case "worry_time": return "Worry Time"
+        case "breathing":               return "Breathing Exercise"
+        case "pmr":                     return "Progressive Muscle Relaxation"
+        case "thought_record":          return "Thought Record"
+        case "worry_time":              return "Scheduled Worry Time"
         case "sleep_window_calculator": return "Sleep Window"
-        default: return exerciseID
+        default:                        return exerciseID
         }
     }
 
     private var icon: String {
         switch exerciseID {
-        case "breathing": return "wind"
-        case "pmr": return "figure.mind.and.body"
+        case "breathing":      return "wind"
+        case "pmr":            return "figure.mind.and.body"
         case "thought_record": return "pencil.and.list.clipboard"
-        case "worry_time": return "timer"
-        default: return "play.circle.fill"
+        case "worry_time":     return "timer"
+        default:               return "play.circle.fill"
         }
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(.indigo)
-                .frame(width: 44, height: 44)
-                .background(Color.indigo.opacity(0.1))
-                .clipShape(Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Try it now")
-                    .font(.caption).foregroundStyle(.secondary)
-                Text(exerciseName)
-                    .font(.headline)
+        Button(action: onTap) {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(.indigo)
+                    .frame(width: 44, height: 44)
+                    .background(Color.indigo.opacity(0.10))
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Try it now")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(exerciseName)
+                        .font(.headline).foregroundStyle(.primary)
+                }
+                Spacer()
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.title2).foregroundStyle(.indigo)
             }
-            Spacer()
-            Image(systemName: "arrow.right.circle.fill")
-                .foregroundStyle(.indigo)
+            .padding(14)
+            .background(Color.indigo.opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.indigo.opacity(0.20), lineWidth: 1))
         }
-        .padding(14)
-        .background(Color.indigo.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.indigo.opacity(0.2), lineWidth: 1))
+        .buttonStyle(.plain)
     }
 }
 
@@ -218,8 +260,7 @@ private struct ReflectionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Reflect", systemImage: "pencil.line")
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
+                .font(.caption.bold()).foregroundStyle(.secondary)
             Text(prompt.question)
                 .font(.subheadline.bold())
             TextEditor(text: $text)

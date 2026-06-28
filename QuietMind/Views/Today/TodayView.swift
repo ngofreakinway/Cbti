@@ -11,60 +11,130 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    // Prescribed sleep window banner
-                    if let profile {
-                        SleepWindowBanner(profile: profile)
-                    }
+                VStack(spacing: 16) {
+                    HeroCard(dayNumber: store.programDayNumber, streak: store.currentStreak, week: profile?.currentWeek ?? 1)
 
-                    // Check-in cards
+                    if let profile { SleepWindowBanner(profile: profile) }
+
                     VStack(spacing: 12) {
                         CheckInCard(
                             title: "Morning Log",
                             subtitle: "How did you sleep last night?",
                             icon: "sunrise.fill",
                             iconColor: .orange,
-                            isCompleted: todayEntry?.morningCompleted ?? false,
-                            action: { showMorningCheckIn = true }
-                        )
+                            isCompleted: todayEntry?.morningCompleted ?? false
+                        ) { showMorningCheckIn = true }
+
                         CheckInCard(
                             title: "Evening Check-In",
                             subtitle: "Factors that may affect tonight",
-                            icon: "moon.fill",
+                            icon: "moon.stars.fill",
                             iconColor: .indigo,
-                            isCompleted: todayEntry?.eveningCompleted ?? false,
-                            action: { showEveningCheckIn = true }
-                        )
+                            isCompleted: todayEntry?.eveningCompleted ?? false
+                        ) { showEveningCheckIn = true }
                     }
-                    .padding(.horizontal)
 
-                    // Today's stats (if morning done)
                     if let entry = todayEntry, entry.morningCompleted {
                         TodayStatsCard(entry: entry)
-                            .padding(.horizontal)
                     }
 
-                    // Sleep window rules reminder
                     StimulusControlReminder()
-                        .padding(.horizontal)
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 32)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 40)
             }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Today")
             .sheet(isPresented: $showMorningCheckIn) {
-                MorningCheckInView(entry: getOrCreateEntry())
+                MorningCheckInView(entry: store.createEntryForToday())
                     .environmentObject(store)
             }
             .sheet(isPresented: $showEveningCheckIn) {
-                EveningCheckInView(entry: getOrCreateEntry())
+                EveningCheckInView(entry: store.createEntryForToday())
                     .environmentObject(store)
             }
         }
     }
+}
 
-    private func getOrCreateEntry() -> SleepEntry {
-        store.createEntryForToday()
+// MARK: - Hero Card
+
+private struct HeroCard: View {
+    let dayNumber: Int
+    let streak: Int
+    let week: Int
+
+    private var greeting: String {
+        let h = Calendar.current.component(.hour, from: Date())
+        if h < 12 { return "Good morning" }
+        if h < 17 { return "Good afternoon" }
+        return "Good evening"
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                colors: [Color(red: 0.24, green: 0.18, blue: 0.60), Color(red: 0.44, green: 0.28, blue: 0.72)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            // Decorative background icon
+            HStack {
+                Spacer()
+                VStack {
+                    Image(systemName: "moon.stars.fill")
+                        .font(.system(size: 90))
+                        .foregroundStyle(.white.opacity(0.07))
+                        .offset(x: 20, y: 0)
+                    Spacer()
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(greeting)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.70))
+
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("Day")
+                        .font(.title2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.70))
+                    Text("\(dayNumber)")
+                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+
+                HStack(spacing: 10) {
+                    Label("Week \(week) of 8", systemImage: "calendar")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.70))
+
+                    if streak > 1 {
+                        Label("\(streak)-day streak", systemImage: "flame.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.orange)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(.white.opacity(0.18))
+                            .clipShape(Capsule())
+                    } else if streak == 1 {
+                        Label("First log!", systemImage: "star.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.yellow)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(.white.opacity(0.18))
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            .padding(20)
+            .padding(.bottom, 4)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: Color.indigo.opacity(0.35), radius: 16, x: 0, y: 8)
     }
 }
 
@@ -73,53 +143,62 @@ struct TodayView: View {
 private struct SleepWindowBanner: View {
     let profile: UserProfile
 
-    private var bedtimeText: String {
-        String(format: "%02d:%02d", profile.prescribedBedTimeHour, profile.prescribedBedTimeMinute)
+    private func timeString(hour: Int, minute: Int) -> String {
+        let isPM = hour >= 12
+        let h = hour % 12 == 0 ? 12 : hour % 12
+        return String(format: "%d:%02d %@", h, minute, isPM ? "PM" : "AM")
     }
-    private var wakeText: String {
-        String(format: "%02d:%02d", profile.prescribedWakeTimeHour, profile.prescribedWakeTimeMinute)
-    }
-    private var tibHours: String {
-        String(format: "%.1fh window", profile.prescribedTimeInBedHours)
+
+    private var tibText: String {
+        let h = profile.prescribedTimeInBedHours
+        let hrs = Int(h)
+        let mins = Int((h - Double(hrs)) * 60)
+        return mins == 0 ? "\(hrs)h window" : "\(hrs)h \(mins)m window"
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            VStack(spacing: 2) {
+            VStack(spacing: 5) {
                 Image(systemName: "moon.fill")
-                    .foregroundStyle(.indigo)
+                    .font(.subheadline)
+                    .foregroundStyle(.indigo.opacity(0.8))
                 Text("Bedtime")
-                    .font(.caption2).foregroundStyle(.secondary)
-                Text(bedtimeText)
-                    .font(.title2.bold())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(timeString(hour: profile.prescribedBedTimeHour, minute: profile.prescribedBedTimeMinute))
+                    .font(.title3.bold())
                     .foregroundStyle(.indigo)
             }
             .frame(maxWidth: .infinity)
 
             VStack(spacing: 4) {
                 Image(systemName: "arrow.right")
-                    .foregroundStyle(.secondary)
-                Text(tibHours)
                     .font(.caption2)
+                    .foregroundStyle(Color(.systemGray3))
+                Text(tibText)
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
 
-            VStack(spacing: 2) {
+            VStack(spacing: 5) {
                 Image(systemName: "sunrise.fill")
-                    .foregroundStyle(.orange)
+                    .font(.subheadline)
+                    .foregroundStyle(.orange.opacity(0.9))
                 Text("Wake")
-                    .font(.caption2).foregroundStyle(.secondary)
-                Text(wakeText)
-                    .font(.title2.bold())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(timeString(hour: profile.prescribedWakeTimeHour, minute: profile.prescribedWakeTimeMinute))
+                    .font(.title3.bold())
                     .foregroundStyle(.orange)
             }
             .frame(maxWidth: .infinity)
         }
-        .padding()
+        .padding(.vertical, 16)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color(.systemGray5), lineWidth: 1))
     }
 }
 
@@ -136,139 +215,153 @@ private struct CheckInCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(isCompleted ? .white : iconColor)
-                    .frame(width: 48, height: 48)
-                    .background(isCompleted ? iconColor : iconColor.opacity(0.12))
-                    .clipShape(Circle())
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(isCompleted ? iconColor : iconColor.opacity(0.12))
+                        .frame(width: 54, height: 54)
+                    Image(systemName: isCompleted ? "checkmark" : icon)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isCompleted ? .white : iconColor)
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isCompleted)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text(isCompleted ? "Completed ✓" : subtitle)
+                        .font(.caption)
+                        .foregroundStyle(isCompleted ? .green : .secondary)
                 }
 
                 Spacer()
 
-                if isCompleted {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.secondary)
-                }
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "chevron.right")
+                    .font(isCompleted ? .title3 : .body)
+                    .foregroundStyle(isCompleted ? .green : Color(.systemGray3))
             }
             .padding(16)
             .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Today Stats
+// MARK: - Today Stats Card
 
 private struct TodayStatsCard: View {
     let entry: SleepEntry
 
+    private var se: Double { entry.sleepEfficiency }
+    private var seColor: Color { se >= 90 ? .green : se >= 85 ? Color(red: 0.75, green: 0.55, blue: 0) : .red }
+    private var seLabel: String { se >= 90 ? "Excellent" : se >= 85 ? "On target" : "Below goal" }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Last Night")
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Last Night", systemImage: "moon.zzz.fill")
                 .font(.headline)
 
             HStack(spacing: 0) {
-                StatItem(label: "Sleep Time", value: SleepCalculator.formatMinutes(entry.totalSleepTime), color: .indigo)
-                Divider().frame(height: 40)
-                StatItem(label: "Efficiency", value: String(format: "%.0f%%", entry.sleepEfficiency), color: efficiencyColor)
-                Divider().frame(height: 40)
-                StatItem(label: "Time Awake", value: SleepCalculator.formatMinutes(entry.wakeAfterSleepOnset), color: .orange)
+                StatPill(icon: "moon.fill", label: "Sleep Time",
+                         value: SleepCalculator.formatMinutes(entry.totalSleepTime), color: .indigo)
+                Divider().frame(height: 48)
+                StatPill(icon: "percent", label: "Efficiency",
+                         value: String(format: "%.0f%%", se), color: seColor)
+                Divider().frame(height: 48)
+                StatPill(icon: "clock.fill", label: "Awake",
+                         value: SleepCalculator.formatMinutes(entry.sleepOnsetMinutes + entry.wakeAfterSleepOnset),
+                         color: .orange)
             }
 
-            EfficiencyBar(efficiency: entry.sleepEfficiency)
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
+            VStack(alignment: .leading, spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color(.systemGray5))
+                        Capsule()
+                            .fill(LinearGradient(
+                                colors: [seColor.opacity(0.65), seColor],
+                                startPoint: .leading, endPoint: .trailing
+                            ))
+                            .frame(width: geo.size.width * min(se / 100, 1))
+                    }
+                }
+                .frame(height: 8)
 
-    private var efficiencyColor: Color {
-        entry.sleepEfficiency >= 90 ? .green : entry.sleepEfficiency >= 85 ? .yellow : .red
+                HStack {
+                    Text("SE goal: 85%").font(.caption2).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(seLabel).font(.caption2.weight(.semibold)).foregroundStyle(seColor)
+                }
+            }
+
+            if entry.sleepQuality > 0 {
+                HStack(spacing: 4) {
+                    Text("Quality:")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    ForEach(1...5, id: \.self) { i in
+                        Image(systemName: i <= entry.sleepQuality ? "star.fill" : "star")
+                            .font(.caption2)
+                            .foregroundStyle(i <= entry.sleepQuality ? Color.orange : Color(.systemGray4))
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 
-private struct StatItem: View {
+private struct StatPill: View {
+    let icon: String
     let label: String
     let value: String
     let color: Color
 
     var body: some View {
-        VStack(spacing: 2) {
-            Text(value).font(.title3.bold()).foregroundStyle(color)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+        VStack(spacing: 4) {
+            Image(systemName: icon).font(.caption2).foregroundStyle(color.opacity(0.8))
+            Text(value).font(.headline.bold()).foregroundStyle(color)
+            Text(label).font(.caption2).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.75)
         }
         .frame(maxWidth: .infinity)
-    }
-}
-
-private struct EfficiencyBar: View {
-    let efficiency: Double
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray5))
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(barColor)
-                        .frame(width: geo.size.width * min(efficiency / 100, 1))
-                }
-            }
-            .frame(height: 8)
-
-            HStack {
-                Text("SE Goal: 85%").font(.caption2).foregroundStyle(.secondary)
-                Spacer()
-                Text(String(format: "%.0f%%", efficiency)).font(.caption2).foregroundStyle(barColor)
-            }
-        }
-    }
-
-    private var barColor: Color {
-        efficiency >= 90 ? .green : efficiency >= 85 ? .yellow : .red
     }
 }
 
 // MARK: - Stimulus Control Reminder
 
 private struct StimulusControlReminder: View {
+    private let rules: [(String, String)] = [
+        ("bed.double.fill", "Only go to bed when genuinely sleepy — not just tired"),
+        ("iphone.slash", "Bed is for sleep only — no screens, reading, or worrying in bed"),
+        ("figure.walk", "If awake 20+ minutes, get up until sleepy again"),
+        ("alarm.fill", "Keep your wake time fixed, even after a bad night"),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             Label("Tonight's Rules", systemImage: "checklist")
                 .font(.headline)
 
-            VStack(alignment: .leading, spacing: 6) {
-                RuleRow(text: "Go to bed only when sleepy, not just tired")
-                RuleRow(text: "Bed is for sleep only — no screens in bed")
-                RuleRow(text: "If awake 20+ min, get up and do something calm")
-                RuleRow(text: "Keep your wake time fixed regardless of sleep")
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(rules, id: \.0) { icon, text in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: icon)
+                            .font(.caption)
+                            .foregroundStyle(.indigo)
+                            .frame(width: 16, alignment: .center)
+                            .padding(.top, 2)
+                        Text(text)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
         }
-        .padding()
+        .padding(16)
         .background(Color(.secondarySystemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-}
-
-private struct RuleRow: View {
-    let text: String
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "moon.fill")
-                .font(.caption)
-                .foregroundStyle(.indigo)
-                .padding(.top, 2)
-            Text(text).font(.caption).foregroundStyle(.secondary)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }

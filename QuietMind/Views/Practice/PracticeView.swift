@@ -2,7 +2,6 @@ import SwiftUI
 
 struct PracticeView: View {
     @EnvironmentObject var store: AppStore
-
     @State private var destination: PracticeDestination?
 
     enum PracticeDestination: String, Hashable {
@@ -12,104 +11,152 @@ struct PracticeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
-                    Text("Evidence-based exercises from the workbook. Practice them during the day so they're easy to use at night.")
+                VStack(spacing: 14) {
+                    Text("Evidence-based exercises from the CBT-I workbook. Practice during the day so they're effortless at night.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 4)
 
                     ExerciseCard(
                         title: "Diaphragmatic Breathing",
-                        subtitle: "Calm the nervous system in 5 minutes",
+                        subtitle: "Activate your parasympathetic nervous system",
+                        description: "Slow, deep breathing that calms physiological arousal in minutes. Use before bed or after waking at night.",
                         icon: "wind",
-                        color: .cyan,
+                        gradient: [Color(red: 0.1, green: 0.65, blue: 0.75), Color(red: 0.0, green: 0.50, blue: 0.62)],
                         duration: "3–10 min",
-                        tag: "Anxiety · Arousal"
+                        tags: ["Anxiety", "Arousal"]
                     ) { destination = .breathing }
 
                     ExerciseCard(
                         title: "Progressive Muscle Relaxation",
                         subtitle: "Systematically release tension from head to toe",
+                        description: "Tense and release 8 muscle groups to achieve deep physical relaxation and reduce pain-related arousal.",
                         icon: "figure.mind.and.body",
-                        color: .purple,
+                        gradient: [Color(red: 0.50, green: 0.22, blue: 0.78), Color(red: 0.38, green: 0.14, blue: 0.62)],
                         duration: "15–20 min",
-                        tag: "Anxiety · Pain"
+                        tags: ["Anxiety", "Pain"]
                     ) { destination = .pmr }
 
                     ExerciseCard(
                         title: "Thought Record",
                         subtitle: "Examine and reframe unhelpful sleep thoughts",
+                        description: "Challenge the catastrophizing thoughts that keep your brain in threat mode. Build more balanced, realistic perspectives.",
                         icon: "pencil.and.list.clipboard",
-                        color: .red,
+                        gradient: [Color(red: 0.88, green: 0.26, blue: 0.38), Color(red: 0.70, green: 0.16, blue: 0.26)],
                         duration: "10 min",
-                        tag: "Cognitive · Depression · Anxiety"
+                        tags: ["Cognitive", "Depression", "Anxiety"]
                     ) { destination = .thoughtRecord }
 
                     ExerciseCard(
                         title: "Scheduled Worry Time",
                         subtitle: "Contain worry to a designated daytime window",
+                        description: "Capture and defer worries to a fixed daily window so they don't intrude at bedtime. Spend 20 minutes processing them intentionally.",
                         icon: "timer",
-                        color: .orange,
+                        gradient: [Color(red: 0.95, green: 0.55, blue: 0.10), Color(red: 0.82, green: 0.40, blue: 0.02)],
                         duration: "20 min/day",
-                        tag: "Anxiety"
+                        tags: ["Anxiety"]
                     ) { destination = .worryTime }
                 }
-                .padding(.vertical)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .padding(.bottom, 8)
             }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Practice")
             .navigationDestination(item: $destination) { dest in
                 switch dest {
-                case .breathing: BreathingExerciseView()
-                case .pmr: PMRView()
+                case .breathing:    BreathingExerciseView()
+                case .pmr:          PMRView()
                 case .thoughtRecord: ThoughtRecordView()
-                case .worryTime: WorryTimeView()
+                case .worryTime:    WorryTimeView()
                 }
             }
         }
     }
 }
 
+// MARK: - Exercise Card
+
 private struct ExerciseCard: View {
     let title: String
     let subtitle: String
+    let description: String
     let icon: String
-    let color: Color
+    let gradient: [Color]
     let duration: String
-    let tag: String
+    let tags: [String]
     let action: () -> Void
+
+    @State private var isPressed = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(color)
-                    .frame(width: 52, height: 52)
-                    .background(color.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.headline)
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        Label(duration, systemImage: "clock")
-                            .font(.caption2).foregroundStyle(color)
-                        Text("·").foregroundStyle(.secondary)
-                        Text(tag).font(.caption2).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 14) {
+                    ZStack {
+                        LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .frame(width: 58, height: 58)
+                        Image(systemName: icon)
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
                     }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(title)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        Label(duration, systemImage: "clock")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(gradient.last ?? .indigo)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.right.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle((gradient.last ?? .indigo).opacity(0.8))
                 }
+                .padding(16)
 
-                Spacer()
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
 
-                Image(systemName: "play.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(color)
+                Divider().padding(.horizontal, 16)
+
+                HStack(spacing: 6) {
+                    ForEach(tags, id: \.self) { tag in
+                        Text(tag)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(gradient.last ?? .indigo)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background((gradient.last ?? .indigo).opacity(0.10))
+                            .clipShape(Capsule())
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
-            .padding(16)
             .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal)
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .scaleEffect(isPressed ? 0.98 : 1.0)
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in withAnimation(.easeInOut(duration: 0.1)) { isPressed = true } }
+                .onEnded   { _ in withAnimation(.easeInOut(duration: 0.15)) { isPressed = false } }
+        )
     }
 }
