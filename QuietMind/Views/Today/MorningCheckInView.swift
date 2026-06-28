@@ -20,7 +20,11 @@ struct MorningCheckInView: View {
 
     @State private var healthSourceFields: Set<String> = []
     @State private var isLoadingHealth = false
-    @State private var healthError: String?
+    @State private var healthStatus: HealthStatus = .idle
+
+    enum HealthStatus: Equatable {
+        case idle, loading, filled(Int), noData, denied, unavailable
+    }
 
     init(entry: SleepEntry) {
         self.entry = entry
@@ -67,8 +71,9 @@ struct MorningCheckInView: View {
         NavigationStack {
             Form {
                 // HealthKit banner
-                if isLoadingHealth {
-                    Section {
+                Section {
+                    switch healthStatus {
+                    case .loading:
                         HStack(spacing: 10) {
                             ProgressView().tint(.pink)
                             Text("Reading Apple Health…")
@@ -76,41 +81,53 @@ struct MorningCheckInView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
-                    }
-                } else if !healthSourceFields.isEmpty {
-                    Section {
+
+                    case .filled(let count):
                         HStack(spacing: 10) {
                             Image(systemName: "heart.fill")
                                 .foregroundStyle(.pink)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Pre-filled from Apple Health")
+                                Text("Pre-filled \(count) fields from Apple Health")
                                     .font(.subheadline.weight(.medium))
-                                Text("Review and adjust anything that looks wrong.")
+                                Text("Pink hearts mark auto-filled fields. Adjust anything that looks wrong.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                         .padding(.vertical, 4)
-                    }
-                } else if let error = healthError {
-                    Section {
-                        HStack(spacing: 10) {
-                            Image(systemName: "exclamationmark.circle")
-                                .foregroundStyle(.orange)
-                            Text(error)
+
+                    case .noData:
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "heart.slash.fill")
+                                    .foregroundStyle(.secondary)
+                                Text("No sleep data in Apple Health")
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            Text("Make sure Sleep Tracking is enabled on your Apple Watch, or that another app writes sleep data to Health.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Button("Try Again") { Task { await fetchHealthData() } }
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.pink)
+                        }
+                        .padding(.vertical, 4)
+
+                    case .denied:
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "lock.slash.fill")
+                                    .foregroundStyle(.orange)
+                                Text("Apple Health access denied")
+                                    .font(.subheadline.weight(.medium))
+                            }
+                            Text("Go to Settings → Privacy & Security → Health → QuietMind and enable Sleep Analysis.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
-                    }
-                } else if HKHealthStore.isHealthDataAvailable() {
-                    Section {
-                        Text("Complete this log as soon as you wake up, while the night is fresh. Estimate — don't obsess over exact times.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Section {
+
+                    case .idle, .unavailable:
                         Text("Complete this log as soon as you wake up, while the night is fresh. Estimate — don't obsess over exact times.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -213,32 +230,36 @@ struct MorningCheckInView: View {
     // MARK: - HealthKit fetch
 
     private func fetchHealthData() async {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        isLoadingHealth = true
-        let granted = await HealthKitManager.shared.requestAuthorization()
-        guard granted else {
-            isLoadingHealth = false
-            healthError = "Apple Health access not granted. Fill in manually."
+        guard HKHealthStore.isHealthDataAvailable() else {
+            healthStatus = .unavailable
             return
         }
+        healthStatus = .loading
+
+        do {
+            try await HealthKitManager.shared.requestAuthorization()
+        } catch {
+            healthStatus = .denied
+            return
+        }
+
         let data = await HealthKitManager.shared.fetchLastNight()
-        isLoadingHealth = false
 
         guard !data.sourceFields.isEmpty else {
-            healthError = "No sleep data found in Apple Health for last night."
+            healthStatus = .noData
             return
         }
 
-        // Apply values from HealthKit
-        if let v = data.bedTime         { bedTime = v }
-        if let v = data.lightsOutTime   { lightsOutTime = v }
-        if let v = data.outOfBedTime    { outOfBedTime = v }
-        if let v = data.finalWakeTime   { finalWakeTime = v }
+        if let v = data.bedTime             { bedTime = v }
+        if let v = data.lightsOutTime       { lightsOutTime = v }
+        if let v = data.outOfBedTime        { outOfBedTime = v }
+        if let v = data.finalWakeTime       { finalWakeTime = v }
         if let v = data.sleepOnsetMinutes   { sleepOnsetMinutes = Double(min(v, 180)) }
         if let v = data.wakeAfterSleepOnset { wakeAfterSleepOnset = Double(min(v, 240)) }
         if let v = data.numberOfAwakenings  { numberOfAwakenings = Double(min(v, 20)) }
 
         healthSourceFields = data.sourceFields
+        healthStatus = .filled(data.sourceFields.count)
     }
 
     private func save() {
